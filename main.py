@@ -1,21 +1,22 @@
 import taichi as ti
 
-ti.init(arch=ti.cuda)
+ti.init(arch=ti.cpu)
 
 # ------- PARAMETERS ---------
 
 
-N = 40
+N = 64
 CLOTH_SIZE = 0.5
 DELTA_SIZE = CLOTH_SIZE / N
 
-GRAVITY = 0.5
-DAMPING = 2
-DT = 0.1
-STIFFNESS = 0.05
+GRAVITY = 4
+DAMPING = 0.01
+DT = 0.001
+STRETCHING_STIFFNESS = 0.2
+COLLISION_STIFFNESS = 0.1
 RESX, RESY = 1600, 900
 
-p = ti.Vector.field(3, float, (N, N)) # cloth particle positions
+p = ti.Vector.field(3, float, (N, N)) # cloth particle predictions
 x = ti.Vector.field(3, float, (N, N)) # cloth particle positions
 v = ti.Vector.field(3, float, (N, N)) # cloth particle velocities
 
@@ -28,7 +29,7 @@ def init_cloth():
         x[i, j] = ti.Vector([
             i * DELTA_SIZE-CLOTH_SIZE/2, 
             j * DELTA_SIZE-CLOTH_SIZE/2,
-            -0.2
+            -0.12
         ])
         v[i, j] = ti.Vector([0, 0, 0])
 
@@ -80,38 +81,84 @@ def solve_constraints(stride):
             lagrange = ((p[i, j] - p[i,j+stride]).norm() - d) / 2
 
             x_delta[i, j]   += -lagrange * n
-            x_delta[i, j+1] +=  lagrange * n
-        # diagonal (down right)
+            x_delta[i, j+stride] +=  lagrange * n
         """
-        if j + 1 < N and i + 1 < N:
-            d = ti.sqrt(2*(DELTA_SIZE**2))
-            n = (p[i, j] - p[i+1,j+1]) / (p[i, j] - p[i+1,j+1]).norm()
-            lagrange = ((p[i, j] - p[i+1,j+1]).norm() - d) / 2
+        # diagonal (down right)
+        if j + stride < N and i + stride < N:
+            d = stride * ti.sqrt(2*(DELTA_SIZE**2))
+            n = (p[i, j] - p[i+stride,j+stride]) / (p[i, j] - p[i+stride,j+stride]).norm()
+            lagrange = ((p[i, j] - p[i+stride,j+stride]).norm() - d) / 2
 
             x_delta[i, j]       += -lagrange * n
-            x_delta[i+1, j+1]   +=  lagrange * n
+            x_delta[i+stride, j+stride]   +=  lagrange * n
         """
         # down
-      
-        
         if i + stride < N:
             d = stride * DELTA_SIZE
             n = (p[i, j] - p[i+stride,j]) / (p[i, j] - p[i+stride,j]).norm()
             lagrange = ((p[i, j] - p[i+stride,j]).norm() - d) / 2
 
             x_delta[i, j]   += -lagrange * n
-            x_delta[i+1, j] +=  lagrange * n
+            x_delta[i+stride, j] +=  lagrange * n
+
+        # up
+        if i - stride >= 0:
+            d = stride * DELTA_SIZE
+            n = (p[i, j] - p[i-stride,j]) / (p[i, j] - p[i-stride,j]).norm()
+            lagrange = ((p[i, j] - p[i-stride,j]).norm() - d) / 2
+
+            x_delta[i, j]   += -lagrange * n
+            x_delta[i-stride,j] +=  lagrange * n
         
+        # left
+        if j - stride >= 0:
+            d = stride * DELTA_SIZE
+            n = (p[i, j] - p[i,j-stride]) / (p[i, j] - p[i,j-stride]).norm()
+            lagrange = ((p[i, j] - p[i,j-stride]).norm() - d) / 2
+
+            x_delta[i, j]   += -lagrange * n
+            x_delta[i, j-stride] +=  lagrange * n
+        """
+        # diagonal (up left)
+        if j - stride >= 0 and i - stride >= 0:
+            d = stride * ti.sqrt(2*(DELTA_SIZE**2))
+            n = (p[i, j] - p[i-stride,j-stride]) / (p[i, j] - p[i-stride,j-stride]).norm()
+            lagrange = ((p[i, j] - p[i-stride,j-stride]).norm() - d) / 2
+
+            x_delta[i, j]       += -lagrange * n
+            x_delta[i-stride, j-stride]   +=  lagrange * n
+
+        # diagonal (up right)
+        if j + stride < N and i - stride >= 0:
+            d = stride * ti.sqrt(2*(DELTA_SIZE**2))
+            n = (p[i, j] - p[i-stride,j+stride]) / (p[i, j] - p[i-stride,j+stride]).norm()
+            lagrange = ((p[i, j] - p[i-stride,j+stride]).norm() - d) / 2
+
+            x_delta[i, j]       += -lagrange * n
+            x_delta[i-stride, j+stride]   +=  lagrange * n
+        
+        # diagonal (down left)
+        if j - stride >= 0 and i + stride < N:
+            d = stride * ti.sqrt(2*(DELTA_SIZE**2))
+            n = (p[i, j] - p[i+stride,j-stride]) / (p[i, j] - p[i+stride,j-stride]).norm()
+            lagrange = ((p[i, j] - p[i+stride,j-stride]).norm() - d) / 2
+
+            x_delta[i, j]       += -lagrange * n
+            x_delta[i+stride, j-stride]   +=  lagrange * n
+        """
+    for i, j in ti.ndrange(N, N):
+        p[i, j] += x_delta[i, j] * STRETCHING_STIFFNESS
+
     # Environment Collision Constraint
     DREST = 0.1
     for i, j in ti.ndrange(N, N):
-        if p[i,j].z > 0. - DREST and p[i,j].x < 0.1 and p[i,j].x > -0.1 and p[i,j].y < 0.1 and p[i,j].y > -0.1:
+        if p[i,j].z > 0. - DREST and p[i,j].x < 0.2 and p[i,j].x > -0.2 and p[i,j].y < 0.2 and p[i,j].y > -0.2:
             n = ti.Vector([0, 0, -1.0])
             x_delta[i,j] += - (n.dot(p[i,j]) - DREST) * n
 
 
     for i, j in ti.ndrange(N, N):
-        p[i, j] += x_delta[i, j] * STIFFNESS
+        p[i, j] += x_delta[i, j] * COLLISION_STIFFNESS
          
 
 @ti.kernel
@@ -129,9 +176,15 @@ def step():
     for _ in range(1):
         for i in range(1):
             solve_constraints(1)
-            solve_constraints(4)
-            solve_constraints(8)
-            solve_constraints(4)
+            #solve_constraints(2)
+            #solve_constraints(4)
+            #solve_constraints(8)
+            #solve_constraints(16)
+            #solve_constraints(32)
+            #solve_constraints(16)
+            #solve_constraints(8)
+            #solve_constraints(4)
+            #solve_constraints(2)
             solve_constraints(1)
             
         
@@ -166,7 +219,7 @@ while window.running:
     step()
     set_vertices()
 
-    camera.position(0, -1, -0.2)
+    camera.position(0, -1, -0.3)
     camera.lookat(0, 0, -0.1)
     scene.set_camera(camera)
 
