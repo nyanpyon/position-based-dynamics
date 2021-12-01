@@ -149,16 +149,15 @@ class Cloth(object, metaclass=ABCMeta):
                 ti.atomic_add(self.x_delta[i], correction_term)
     """
 
-
-    def solve_collision_constraints(self, ITERATIONS, obj):
-        data = ti.Vector.field(3, float, self.V)
-        result = ti.Vector.field(3, float, self.V)
-
+    @ti.kernel
+    def solve_collision_constraints(self, ITERATIONS : ti.int32, obj : ti.template()):
+        KC = self.KC**ITERATIONS
+        
         for i in range(self.V):
-            data[i] = self.p[i]
-
-        o.set_data(data, result)
-        o.solve_collision_constraint_for_all()
+            point = self.p[i]
+            if obj.collides(point):
+                corr = obj.solve_collision_constraint(point)
+                ti.atomic_add(self.x_delta[i], -KC * corr)
 
         
         

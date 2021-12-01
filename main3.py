@@ -1,5 +1,8 @@
 import taichi as ti
 
+ti.init(arch=ti.cpu)
+
+
 @ti.kernel
 def kernel(p : ti.template()):
     print(1)

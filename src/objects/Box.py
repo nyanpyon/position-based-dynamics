@@ -40,7 +40,6 @@ class Box(Object):
             rgb color of the cube
     """
     def __init__(self, center, size, color=(1, 1, 1), drest=0.01):
-        super()
         self.center = center
         self.size = size
         self.color = color

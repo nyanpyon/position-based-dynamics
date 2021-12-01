@@ -13,7 +13,6 @@ class Sphere(Object):
             rgb color of the sphere range[0-1]
     """
     def __init__(self, center, radius, color=(1, 1, 1), drest = 0.01):
-        super(self)
         self.center = center
         self.radius = radius
         self.color = color
@@ -41,7 +40,7 @@ class Sphere(Object):
             the point which collides
     """
     @ti.func
-    def collides(self, p):
+    def collides(self, p : ti.template()):
         cp = p - self.center
         
         return cp.norm() < self.radius + self.drest
@@ -53,7 +52,7 @@ class Sphere(Object):
             the point which collides
     """
     @ti.func
-    def solve_collision_constraint(self, p):
+    def solve_collision_constraint(self, p : ti.template()):
         cp = p - self.center
         n = cp / cp.norm()
         return (cp.norm() - (self.radius+self.drest)) * n
