@@ -12,7 +12,7 @@ class Sphere(Object):
         color : tuple(r, g, b), optional
             rgb color of the sphere range[0-1]
     """
-    def __init__(self, center, radius, color=(1, 1, 1), drest = 0.01):
+    def __init__(self, center, radius, color=(1, 1, 1), drest = 0.005):
         self.center = center
         self.radius = radius
         self.color = color
@@ -31,7 +31,7 @@ class Sphere(Object):
             the scene object
     """
     def draw(self, scene):
-        scene.particles(self.center_field, radius=self.radius, color=self.color)
+        scene.particles(self.center_field, radius=self.radius*0.95, color=self.color)
 
     """
     @OVERRIDE
@@ -40,10 +40,31 @@ class Sphere(Object):
             the point which collides
     """
     @ti.func
-    def collides(self, p : ti.template()):
-        cp = p - self.center
+    def collides(self, p : ti.template(), old_p : ti.template()):
+        d = p - old_p
+
+        oc = old_p - self.center
+
+        a = d.dot(d)
+        b = 2 * oc.dot(d)
+        c = oc.dot(oc) - (self.radius) * (self.radius) 
+
+        t = -1.
+        det = b * b - 4 * a * c 
+
+        if det > 0:
+            t1 = (-b + ti.sqrt(det)) / (2 * a)
+            t2 = (-b - ti.sqrt(det)) / (2 * a)
+
+
+
+            if t1 >= 0 and t2 >= 0:
+                if t1 > t2:
+                    t = t2
+                else:
+                    t = t1
         
-        return cp.norm() < self.radius + self.drest
+        return t
 
     """
     @OVERRIDE
@@ -52,7 +73,13 @@ class Sphere(Object):
             the point which collides
     """
     @ti.func
-    def solve_collision_constraint(self, p : ti.template()):
-        cp = p - self.center
-        n = cp / cp.norm()
-        return (cp.norm() - (self.radius+self.drest)) * n
+    def solve_collision_constraint(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
+        d =  p - old_p
+        collision_point = old_p + t * d
+
+        n = collision_point - self.center
+        n = n / n.norm()
+        
+        C = (p - collision_point).dot(n) - self.drest
+        lagrange = C
+        return - lagrange * n

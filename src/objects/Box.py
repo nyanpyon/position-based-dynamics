@@ -92,7 +92,8 @@ class Box(Object):
         p : ti.Vector([x, y, z])
             the point which collides
     """
-    def collides(self, p):
+    @ti.func
+    def collides(self, p : ti.template(), old_p : ti.template()):
         corner = self.center - (self.size/2)
         left = corner.x - self.drest
         right = corner.x + self.size.x + self.drest
@@ -110,5 +111,5 @@ class Box(Object):
         p : ti.Vector([x, y, z])
             the point which collides
     """
-    def solve_collision_constraint(self, p):
+    def solve_collision_constraint(self, p, old_p):
         pass

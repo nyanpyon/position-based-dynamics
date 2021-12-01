@@ -23,7 +23,7 @@ class Object(object, metaclass=ABCMeta):
             the point which collides
     """
     @abstractmethod
-    def collides(self, p):
+    def collides(self, p, old_p):
         pass
 
     """
@@ -33,5 +33,5 @@ class Object(object, metaclass=ABCMeta):
             the point which collides
     """
     @abstractmethod
-    def solve_collision_constraint(self, p):
+    def solve_collision_constraint(self, p, old_p, t):
         pass
