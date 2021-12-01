@@ -63,8 +63,8 @@ class GridCloth(Cloth):
         v = ti.Vector.field(3, float, (self.N, self.M))
         
         for i, j in ti.ndrange(self.N, self.M):
-            x[i, j] = corner + ti.Vector([i * self.SN / self.N, j * self.SM / self.M, 0])
-            v[i, j] = ti.Vector([0, 0, 0])
+            x[i, j] = corner + ti.Vector([i * self.SN / (self.N - 1), j * self.SM / (self.M - 1), 0])
+            v[i, j] = ti.Vector([0, 0, 0]) 
 
         return x, v
 
@@ -104,6 +104,10 @@ class GridCloth(Cloth):
                 edges_list.append(i * self.M + j)
                 edges_list.append((i + 1) * self.M + j + 1)
 
+            if j + 1 < self.M and i + 1 < self.N:
+                edges_list.append(i * self.M + j + 1)
+                edges_list.append((i + 1) * self.M + j)
+
         l = len(edges_list)
         edges = ti.field(int, l)
         for i in range(l):
@@ -114,23 +118,25 @@ class GridCloth(Cloth):
     def make_tripairs(self):
         tripair_list = []
         for i, j in ti.ndrange(self.N, self.M):
-            if i + 1 < self.N and j < self.M:
+            if i + 1 < self.N and j+1 < self.M:
                 tripair_list.append(i * self.M + j)
                 tripair_list.append( (i+1) * self.M + j + 1)
                 tripair_list.append( i * self.M + j + 1)
                 tripair_list.append( (i+1) * self.M + j)
 
-            if i + 1 < self.N and j < self.M and i - 1 >= 0:
+            if i + 1 < self.N and j+1 < self.M and i - 1 >= 0:
                 tripair_list.append(i * self.M + j)
                 tripair_list.append( (i) * self.M + j+1)
-                tripair_list.append( (i-1) * self.M + j)
+                
                 tripair_list.append( (i+1) * self.M + j + 1)
+                tripair_list.append( (i-1) * self.M + j)
 
-            if i + 1 < self.N and j < self.M and j - 1 >= 0:
+            if i + 1 < self.N and j+1 < self.M and j - 1 >= 0:
                 tripair_list.append(i * self.M + j)
                 tripair_list.append( (i+1) * self.M + j)
-                tripair_list.append( (i+1) * self.M + j + 1)
+                
                 tripair_list.append( i * self.M + j - 1)
+                tripair_list.append( (i+1) * self.M + j + 1)
 
         l = len(tripair_list)
         tripairs = ti.field(int, l)

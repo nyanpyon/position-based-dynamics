@@ -1,5 +1,6 @@
 import taichi as ti
 from abc import ABCMeta, abstractmethod
+from src.objects.Object import Object
 
 @ti.data_oriented
 class Cloth(object, metaclass=ABCMeta):
@@ -15,6 +16,7 @@ class Cloth(object, metaclass=ABCMeta):
         self.KC = KC
         self.KB = KB
         self.DAMPING = DAMPING
+        self.objs = None
 
         self.vertices = ti.Vector.field(3, float, self.V)
         self.x = ti.Vector.field(3, float, self.V)
@@ -53,7 +55,14 @@ class Cloth(object, metaclass=ABCMeta):
     @ti.kernel
     def make_predictions(self, DT : ti.f32):
         for i in range(self.V):
-            self.p[i] = self.x[i] + DT * self.v[i]  
+            self.p[i] = self.x[i] + DT * self.v[i] 
+
+    @ti.kernel
+    def update_predictions(self):
+        for i in range(self.V):
+            self.p[i] += self.x_delta[i]
+            self.x_delta[i] = ti.Vector([0, 0, 0])
+
 
     @ti.kernel
     def apply_correction(self, DT : ti.f32):
@@ -66,7 +75,8 @@ class Cloth(object, metaclass=ABCMeta):
 
 
     @ti.kernel
-    def solve_stretching_constraint(self):
+    def solve_stretching_constraint(self, ITERATIONS : ti.int32):
+        KS = self.KS**ITERATIONS
         for i in range(self.edges.shape[0]/2):
             p1 = self.edges[2 * i]
             p2 = self.edges[2 * i+1]
@@ -77,22 +87,20 @@ class Cloth(object, metaclass=ABCMeta):
 
             lagrange = (l- d) / 2
 
-            self.x_delta[p1] -= self.KS * lagrange * n
-            self.x_delta[p2] += self.KS * lagrange * n
+            #self.x_delta[p1] -= self.KS * lagrange * n
+            #self.x_delta[p2] += self.KS * lagrange * n
 
-            ti.atomic_add(self.x_delta[p1], -self.KS * lagrange * n)
-            ti.atomic_add(self.x_delta[p2], self.KS * lagrange * n)
+            ti.atomic_add(self.x_delta[p1], -KS * lagrange * n)
+            ti.atomic_add(self.x_delta[p2], KS * lagrange * n)
 
     @ti.func
     def fit(self, a):
-        while a > 1:
-            a -= 2
-        while a < -1:
-            a += 2
-        return a
+        return min(max(a, -1), 1)
 
     @ti.kernel
-    def solve_bending_constraints(self):
+    def solve_bending_constraints(self, ITERATIONS : ti.int32):
+        KB = self.KB**ITERATIONS
+
         for i in range(self.tripairs.shape[0]/4):
             p1 = self.tripairs[4 * i]
             p2 = self.tripairs[4 * i+1]
@@ -126,7 +134,31 @@ class Cloth(object, metaclass=ABCMeta):
             S = q1.norm()**2 + q2.norm()**2 + q3.norm()**2 + q4.norm()**2
                     
             if not sd == 0:
-                ti.atomic_add(self.x_delta[p1], self.KB * (sd/S * q1))
-                ti.atomic_add(self.x_delta[p2], self.KB * (sd/S * q2))
-                ti.atomic_add(self.x_delta[p3], self.KB * (sd/S * q3))
-                ti.atomic_add(self.x_delta[p4], self.KB * (sd/S * q4))
+                ti.atomic_add(self.x_delta[p1], KB * (sd/S * q1))
+                ti.atomic_add(self.x_delta[p2], KB * (sd/S * q2))
+                ti.atomic_add(self.x_delta[p3], KB * (sd/S * q3))
+                ti.atomic_add(self.x_delta[p4], KB * (sd/S * q4))
+
+    """
+    def collision_kernel(self, ITERATIONS : ti.int32, idx: ti.int32):
+        
+        KC = self.KC**ITERATIONS
+        for i in range(self.V):
+            if self.objs[idx].collides(self.p[i]):
+                correction_term = - KC * self.objs[int(idx)].solve_collision_constraint(self.p[i])
+                ti.atomic_add(self.x_delta[i], correction_term)
+    """
+
+
+    def solve_collision_constraints(self, ITERATIONS, obj):
+        data = ti.Vector.field(3, float, self.V)
+        result = ti.Vector.field(3, float, self.V)
+
+        for i in range(self.V):
+            data[i] = self.p[i]
+
+        o.set_data(data, result)
+        o.solve_collision_constraint_for_all()
+
+        
+        

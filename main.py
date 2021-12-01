@@ -12,14 +12,14 @@ SOLVER_ITERATIONS = 2      # Iterations for solver optimization
 DT = 0.005                 # Time delta
 
 # Material Properties
-N = 128                  # NxN grid
+N = 20                  # NxN grid
 CLOTH_SIZE = 0.5            # Size in 3d coords
 DELTA_SIZE = CLOTH_SIZE / N # space between 2 grid points
 
 STRETCHING_STIFFNESS = 0.6 # 0-1 where 0 = stiff
 WD = np.pi                  # initial angle between triangles
-BENDING_STIFFNESS = 0.4   # 0-1 where 1 = no bending
-COLLISION_STIFFNESS = 0.4  # 0-1 where 1 = max repulsion
+BENDING_STIFFNESS = 0.1   # 0-1 where 1 = no bending
+COLLISION_STIFFNESS = 0.9  # 0-1 where 1 = max repulsion
 
 # Cube Properties
 cube_corner = ti.Vector([-0.2, -0.2, -0.4])
@@ -181,10 +181,10 @@ def get_bending_correction(p1, p2, p3, p4):
 
     d = n1.dot(n2)
 
-    while d < -1:
-        d += 2
-    while d > 1:
-        d -= 2
+    if d < -1:
+        d = -1.
+    if d > 1:
+        d = 1.
 
     q3 = (op2.cross(n2) + n1.cross(op2) * d) / (op2.cross(op3)).norm() 
     q4 = (op2.cross(n1) + n2.cross(op2) * d) / (op2.cross(op4)).norm()
@@ -284,7 +284,7 @@ def solve_box_collison(corner, width, depth, height):
                 
             correction_direction = sign(biggest) * box_collision_normals[index]
 
-            eps = 0.2
+            eps = 0.5
             cos45 = 1 / ti.sqrt(2) 
             if not (biggest > cos45 - eps and biggest < cos45 + eps):
                 x_delta[i,j] += - KC * (correction_direction.dot(p[i,j]) - DREST) * correction_direction
@@ -299,36 +299,11 @@ def solve_sphere_collison(center, radius):
     for i, j in ti.ndrange(N, N):
         point_vector = p[i,j] - center
         
-        if (point_vector.norm() <  DELTA_SIZE + radius + DREST):
-            n = point_vector = point_vector / point_vector.norm()
-            x_delta[i,j] += - KC * (n.dot(p[i,j]) - DREST) * n
+        if (point_vector.norm() <  radius + DREST):
+            n = point_vector / point_vector.norm()
+            x_delta[i,j] += - KC * (point_vector.norm() - (radius + DREST)) * n
             
-            
-        """
-        if p[i,j].z < 0. + DREST and p[i,j].x < 0.2 and p[i,j].x > -0.2 and p[i,j].y < 0.2 and p[i,j].y > -0.2:
-            n = ti.Vector([0, 0, 1.0])
-            x_delta[i,j] += - KC * (n.dot(p[i,j]) - DREST) * n
-        
-        # left
-        if p[i,j].x < 0.2 + DREST and p[i,j].x < 0.2 and p[i,j].z > 0:
-            n = ti.Vector([-1, 0, 0])
-            x_delta[i,j] += - KC * (n.dot(p[i,j]) - DREST) * n
 
-        # right
-        if p[i,j].x > -0.2 - DREST and p[i,j].x < -0.2 and p[i,j].z > 0:
-            n = ti.Vector([1, 0, 0])
-            x_delta[i,j] += - KC * (n.dot(p[i,j]) - DREST) * n
-        
-        # back
-        if p[i,j].y > 0.2 + DREST and p[i,j].z < 0:
-            n = ti.Vector([0, -1, 0])
-            x_delta[i,j] += - KC * (n.dot(p[i,j]) - DREST) * n
-
-        # front
-        if p[i,j].y < -0.2 - DREST and p[i,j].z < 0:
-            n = ti.Vector([0, 1, 0])
-            x_delta[i,j] += - KC * (n.dot(p[i,j]) - DREST) * n
-        """
 @ti.func
 def solve_constraints(stride):
     # particle corrections
@@ -347,8 +322,8 @@ def solve_constraints(stride):
         
     for i, j in ti.ndrange(N, N):
         x_delta[i, j] = ti.Vector([0, 0, 0])
-    solve_box_collison(cube_corner, cube_width, cube_width, cube_height)
-    #solve_sphere_collison(sphere_center[0], sphere_radius)
+    #solve_box_collison(cube_corner, cube_width, cube_width, cube_height)
+    solve_sphere_collison(sphere_center[0], sphere_radius)
 
     for i, j in ti.ndrange(N, N):
         p[i, j] += x_delta[i, j]
@@ -454,12 +429,12 @@ while window.running:
                color=(0.8, 0, 0),
                two_sided=True)
     
-    #scene.particles(sphere_center, radius=sphere_radius, color=(0.5, 0, 0))
+    scene.particles(sphere_center, radius=sphere_radius, color=(0, 0.6, 0))
 
-    scene.mesh(cube_vertices,
-               indices=cube_indices,
-               color=(0, 0, 0.9),
-               two_sided=True)
+    #scene.mesh(cube_vertices,
+    #           indices=cube_indices,
+    #           color=(0, 0, 0.9),
+    #           two_sided=True)
     
     #scene.particles(origin, radius=0.05, color=(1, 1, 1)) # origin
     #scene.particles(or_x, radius=0.05, color=(1, 0, 0)) # x

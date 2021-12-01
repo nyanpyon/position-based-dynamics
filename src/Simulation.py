@@ -1,5 +1,6 @@
 import taichi as ti
 import numpy as np
+import math
 from src.objects.Box import Object 
 from src.clothes.Cloth import Cloth 
 
@@ -15,7 +16,7 @@ class Simulation():
         res: tuple(width, height)
             window size in pixels
     """
-    def __init__(self, name, gravity=-10, dt=0.001, res=(500, 500), iterations=5):
+    def __init__(self, name, gravity=-10, dt=0.005, res=(500, 500), iterations=4):
         ti.init(arch=ti.cpu)
 
         # simulation properties
@@ -58,7 +59,7 @@ class Simulation():
         self.camera_up = camera_up
 
     def draw_camera(self):
-        self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
+        #self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
         self.camera.lookat(self.camera_lookat[0], self.camera_lookat[1], self.camera_lookat[2])
         self.camera.up(self.camera_up[0], self.camera_up[1], self.camera_up[2])   
         self.scene.set_camera(self.camera)
@@ -100,16 +101,25 @@ class Simulation():
 
         #call solver
         for i in range(self.NUM_ITERATIONS):
-            c.solve_stretching_constraint()
-            c.solve_bending_constraints()
+            c.solve_stretching_constraint(self.NUM_ITERATIONS)
+            c.solve_bending_constraints(self.NUM_ITERATIONS)
 
+            for o in self.objects:
+                c.solve_collision_constraints(self.NUM_ITERATIONS, o)
+
+            c.update_predictions()
         c.apply_correction(self.DT)
 
     """ 
     runs the simulation
     """
+    
     def run(self):
+        z = 0
         while self.window.running:
+            z += 0.003
+
+            self.camera.position(2 * math.cos(z), 2 * math.sin(z), 1)
             self.draw_camera()
             
 

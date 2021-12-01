@@ -12,15 +12,17 @@ class Sphere(Object):
         color : tuple(r, g, b), optional
             rgb color of the sphere range[0-1]
     """
-    def __init__(self, center, radius, color=(1, 1, 1)):
-        super()
+    def __init__(self, center, radius, color=(1, 1, 1), drest = 0.01):
+        super(self)
         self.center = center
         self.radius = radius
         self.color = color
+        self.drest = drest
 
         self.center_field = ti.Vector.field(3, float, (1, ))
-        r = ti.Vector([0, 0, -self.radius])
-        self.center_field[0] = self.center - r
+        
+        self.center_field[0] = self.center
+
 
 
     """
@@ -38,8 +40,11 @@ class Sphere(Object):
         p : ti.Vector([x, y, z])
             the point which collides
     """
+    @ti.func
     def collides(self, p):
-        pass
+        cp = p - self.center
+        
+        return cp.norm() < self.radius + self.drest
 
     """
     @OVERRIDE
@@ -47,5 +52,8 @@ class Sphere(Object):
         p : ti.Vector([x, y, z])
             the point which collides
     """
+    @ti.func
     def solve_collision_constraint(self, p):
-        pass
+        cp = p - self.center
+        n = cp / cp.norm()
+        return (cp.norm() - (self.radius+self.drest)) * n

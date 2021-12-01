@@ -39,13 +39,16 @@ class Box(Object):
         color : tuple(r, g, b) , optional
             rgb color of the cube
     """
-    def __init__(self, center, size, color=(1, 1, 1)):
+    def __init__(self, center, size, color=(1, 1, 1), drest=0.01):
         super()
         self.center = center
         self.size = size
         self.color = color
+        self.drest = drest
 
         self.vertices, self.indices = self.make_box()
+
+        
 
     """
     returns the vertices list and the indeces of the box
@@ -91,7 +94,16 @@ class Box(Object):
             the point which collides
     """
     def collides(self, p):
-        pass
+        corner = self.center - (self.size/2)
+        left = corner.x - self.drest
+        right = corner.x + self.size.x + self.drest
+        down = corner.z - self.drest
+        up = corner.z + self.size.z + self.drest
+        front = corner.y - self.drest
+        back = corner.y + self.size.y + self.drest
+        return (p.x > left and p.x < right and 
+            p.z > down and p.z < up and 
+            p.y > front and p.y < back)
 
     """
     @OVERRIDE
