@@ -69,7 +69,7 @@ class Simulation():
         self.camera_up = camera_up
 
     def draw_camera(self):
-        self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
+        #self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
         self.camera.lookat(self.camera_lookat[0], self.camera_lookat[1], self.camera_lookat[2])
         self.camera.up(self.camera_up[0], self.camera_up[1], self.camera_up[2])   
         self.scene.set_camera(self.camera)
@@ -120,12 +120,13 @@ class Simulation():
         for i in range(self.NUM_ITERATIONS):
             c.solve_stretching_constraint(self.NUM_ITERATIONS)
             c.solve_bending_constraints(self.NUM_ITERATIONS)
-            c.update_predictions()
+        
+        c.solve_self_collision_constraints()
 
         for o in self.objects:
             c.solve_collision_constraints(o)
-        c.update_predictions()
 
+        
             
         c.apply_correction(self.DT)
 
@@ -142,7 +143,7 @@ class Simulation():
             TIME += self.DT
             next_frame += self.DT
 
-            #self.camera.position(2 * math.cos(TIME), 2 * math.sin(TIME), 1)
+            self.camera.position(2 * math.cos(TIME), 2 * math.sin(TIME), 1)
             self.draw_camera()
             
 

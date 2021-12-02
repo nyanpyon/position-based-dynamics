@@ -12,7 +12,7 @@ class Sphere(Object):
         color : tuple(r, g, b), optional
             rgb color of the sphere range[0-1]
     """
-    def __init__(self, center, radius, color=(1, 1, 1), drest = 0.005):
+    def __init__(self, center, radius, color=(1, 1, 1), drest = 0.001):
         self.center = center
         self.radius = radius
         self.color = color
@@ -63,7 +63,8 @@ class Sphere(Object):
                     t = t2
                 else:
                     t = t1
-        
+
+
         return t
 
     """
