@@ -21,7 +21,7 @@ class GridCloth(Cloth):
         color : tuple(r, g, b)
             rgb color of the cloth
     """ 
-    def __init__(self, N=(64, 64), S=(1, 1), KS=0.6, KB=0.4, KC=0.4, DAMPING=0.3, center=ti.Vector([0, 0, 0]), color=(1, 1, 1)):
+    def __init__(self, N=(64, 64), S=(1, 1), W = 1, KS=0.6, KB=0.4, KC=0.4, DAMPING=0.3, center=ti.Vector([0, 0, 0]), color=(1, 1, 1)):
         self.N, self.M = N
         self.SN, self.SM = S
         self.center = center
@@ -29,6 +29,7 @@ class GridCloth(Cloth):
         self.KS = KS
         self.KB = KB
         self.KC = KC
+        self.W = W
 
         x, v = self.make_grid()
 
@@ -39,7 +40,9 @@ class GridCloth(Cloth):
         e = self.make_edges()
         t = self.make_tripairs()
 
-        Cloth.__init__(self, self.N * self.M, x, v, i, e, t, color, KS, KC, KB, DAMPING)
+        w = self.make_weight()
+
+        Cloth.__init__(self, self.N * self.M, x, v, w, i, e, t, color, KS, KC, KB, DAMPING)
 
     """
     flattens 2D array to 1D for super constructor
@@ -144,3 +147,11 @@ class GridCloth(Cloth):
             tripairs[i] = tripair_list[i]
 
         return tripairs
+
+    def make_weight(self):
+        V = self.N * self.M
+        w = ti.field(float, V)
+        for i in range(V):
+            w[i] = self.W / V
+
+        return w
