@@ -20,7 +20,7 @@ class Simulation():
         res: tuple(width, height)
             window size in pixels
     """
-    def __init__(self, name, gravity=-10, dt=0.005, res=(500, 500), iterations=4, MODE=ti.cpu):
+    def __init__(self, name, gravity=-10, dt=0.005, res=(500, 500), iterations=4, MODE=ti.cpu, rotateCamera=False):
         ti.init(arch=MODE)
 
         # simulation properties
@@ -43,6 +43,7 @@ class Simulation():
         self.camera_position = ti.Vector([0, -1, 0])
         self.camera_lookat = ti.Vector([0, 0, 0])
         self.camera_up = ti.Vector([0, 0, 1])
+        self.rotateCamera = rotateCamera
 
         # objects of the scene
         self.lights = []
@@ -68,8 +69,12 @@ class Simulation():
         self.camera_lookat = camera_lookat
         self.camera_up = camera_up
 
-    def draw_camera(self):
-        #self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
+    def draw_camera(self, TIME):
+        if self.rotateCamera:
+             p = self.camera_position * ti.Vector([2 * math.cos(TIME), 2 * math.sin(TIME), 1])
+             self.camera.position(p[0], p[1], p[2])
+        else:
+            self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
         self.camera.lookat(self.camera_lookat[0], self.camera_lookat[1], self.camera_lookat[2])
         self.camera.up(self.camera_up[0], self.camera_up[1], self.camera_up[2])   
         self.scene.set_camera(self.camera)
@@ -124,10 +129,11 @@ class Simulation():
             c.solve_stretching_constraint(self.NUM_ITERATIONS)
             c.solve_bending_constraints(self.NUM_ITERATIONS)
 
+        #c.solve_self_collision_constraints(self.DT)
         for o in self.objects:
             c.solve_collision_constraints(o)
 
-        #c.solve_self_collision_constraints(self.DT)
+        
 
         
             
@@ -146,8 +152,8 @@ class Simulation():
             TIME += self.DT
             next_frame += self.DT
 
-            self.camera.position(2 * math.cos(TIME), 2 * math.sin(TIME), 1)
-            self.draw_camera()
+           
+            self.draw_camera(TIME)
             
 
             # add lights

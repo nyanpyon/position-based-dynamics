@@ -188,20 +188,21 @@ class Cloth(object, metaclass=ABCMeta):
 
                 
                 if not(i == vi1 or i == vi2 or i == vi3):
+                    
                     thickness = 0.001
                     t = self.triangle_collision(new_point, point, V1, V2, V3)
 
-
+                    
                     if t >= 0 and t <= 1:
                         
-                     """   
+                       
                         n = (V2 - V1).cross(V3 - V1)
                         n = n / n.norm()
                         
                         if n.dot(v) > 0:
                             n = -n
 
-                        C = n.dot(point - V1) - 2 * thickness
+                        C = n.dot(new_point - V1) - 2 * thickness
                         M = n.outer_product(n)
                         M[0, 0] = 1 - M[0, 0]
                         M[1, 1] = 1 - M[1, 1]
@@ -209,7 +210,7 @@ class Cloth(object, metaclass=ABCMeta):
 
                         M = M / n.norm()
 
-                        cp = n
+                        cp = -n
                         c1 = (V2 - V3).cross(M @ n - n)
                         c2 = (V3 - V1).cross(M @ n)
                         c3 = (V2 - V1).cross(M @ n)
@@ -244,6 +245,6 @@ class Cloth(object, metaclass=ABCMeta):
                     if t >= 0 and t <= 1:
                         #ti.atomic_add(self.p[i],  - lagrange * triangle_normal)
                         ti.atomic_add(self.p[i], (collision_point - point) - thickness * triangle_normal)
-                    
+                    """ 
 
                 
