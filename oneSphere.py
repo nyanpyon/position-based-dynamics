@@ -18,5 +18,5 @@ sim.add_object(s)
 p = Plane(ti.Vector([0, 0, -0.3]), color=(0.3, 0.3, 0.3), drest = 0.01)
 sim.add_object(p)
 
-#sim.make_video("sim3-4-5")
+#sim.make_video("sim")
 sim.run()
