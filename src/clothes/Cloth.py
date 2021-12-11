@@ -24,8 +24,6 @@ class Cloth(object, metaclass=ABCMeta):
         self.p = ti.Vector.field(3, float, self.V)
         self.WEIGHT = WEIGHT
 
-        self.CONSTRAINTS = []
-
         self.reset_pos_and_vel()
 
     """
@@ -132,25 +130,16 @@ class Cloth(object, metaclass=ABCMeta):
                 ti.atomic_add(self.p[p3], KB * self.WEIGHT[p3] * (sd/S * q3))
                 ti.atomic_add(self.p[p4], KB * self.WEIGHT[p4] * (sd/S * q4))
 
-    def clear_collision_constraints(self):
-        self.CONSTRAINTS = []
-
-    def generate_collision_constraints(self, obj : ti.template()):
-        for i in range(self.V):
-            point = self.p[i]
-            old_point = self.x[i]
-
-            if obj.collides(point, old_point):
-                self.CONSTRAINTS.append((obj, i))
 
     @ti.kernel
-    def solve_collision_constraints_kernel(self,  constraints : ti.template(), ITERATIONS : ti.int32):
-        KC = self.KC**ITERATIONS
-        print(constraints)
+    def solve_collision_constraints(self,  obj : ti.template(), ITERATIONS : ti.int32):
+        KC = 1
+        for i in range(self.V):
+            p = self.p[i]
+            x = self.x[i]
 
-    
-    def solve_collision_constraints(self,  ITERATIONS):
-        self.solve_collision_constraints_kernel(self.CONSTRAINTS, ITERATIONS)
+            corr = obj.solve_collision_constraint(p, x)
+            ti.atomic_add(self.p[i], KC * corr)
 
     @ti.func
     def triangle_collision(self, p, old_p, V1, V2, V3):

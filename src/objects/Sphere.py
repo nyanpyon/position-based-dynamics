@@ -77,21 +77,34 @@ class Sphere(Object):
             the point which collides
     """
     @ti.func
-    def solve_collision_constraint(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
-        d =  p - old_p
-        collision_point = old_p + t * d
+    def solve_collision_constraint(self, p : ti.template(), x : ti.template()):
+        cp = p - self.center
+        res = x - x
+        if cp.norm() < (self.radius + self.drest):
+            if (x - self.center).norm() < self.radius + self.drest:
+            
+                
+                n = cp / cp.norm()
 
-        n = collision_point - self.center
-        n = n / n.norm()
-        
-        C = (p - collision_point).dot(n) - self.drest
-        lagrange = C
-        return - lagrange * n
+                res = (self.radius + self.drest - cp.norm()) * n
+            else:
+                
+                d = p - x
+                oc = x - self.center
 
-    @ti.func
-    def push_outside(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
-        d =  p - old_p
-        collision_point = old_p + t * d
-        n = collision_point - self.center
-        n = n / n.norm()
-        return -t * d + self.drest * n
+                a = d.dot(d)
+                b = 2.0 * oc.dot(d)
+                c = oc.dot(oc) - (self.radius + self.drest) * (self.radius + self.drest)
+
+                t = 0
+                disc = b*b - 4 * a * c
+                if disc > 0:
+                    t = (-b - ti.sqrt(disc)) / (2 * a)
+
+                collision_point = x + t * d
+                n = collision_point - self.center
+                n = n / n.norm()
+                
+                C = (p - collision_point).dot(n) - self.drest
+                res =  - C * n
+        return res

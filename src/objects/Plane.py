@@ -62,30 +62,16 @@ class Plane(Object):
 
     """
     @OVERRIDE
-    check if p collides with the object
-        p : ti.Vector([x, y, z])
-            the point which collides
-    """
-    @ti.func
-    def collides(self, p : ti.template(), old_p : ti.template()):
-        b = -(old_p - self.center)
-        d = p - old_p
-        t = (b.dot(self.normal))/(d.dot(self.normal))
-        return t
-
-    """
-    @OVERRIDE
     solves the collision constraint for a point p
         p : ti.Vector([x, y, z])
             the point which collides
     """
     @ti.func
-    def solve_collision_constraint(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
-        d = p - old_p
-        cp = old_p + t * d
-        return -(1.1-t) * d
+    def solve_collision_constraint(self, p : ti.template(), x : ti.template()):
+        cp = p - self.center
+        cpdrest = cp - self.drest * self.normal
 
-    @ti.func
-    def push_outside(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
-        d = p - old_p
-        return -t * d + self.drest * self.normal
+        l = abs(cpdrest.dot(self.normal))
+        #print(cpdrest.dot(self.normal))
+
+        return l * self.normal if cpdrest.dot(self.normal) < 0 else ti.Vector([0, 0, 0])
