@@ -122,22 +122,21 @@ class Simulation():
         c.make_predictions(self.DT)
 
         
-        
-
+        #c.solve_self_collision_constraints(self.DT)
+        for o in self.objects:
+            c.solve_collision_constraints(o)
+            
         #call solver
         for i in range(self.NUM_ITERATIONS):
             c.solve_stretching_constraint(self.NUM_ITERATIONS)
             c.solve_bending_constraints(self.NUM_ITERATIONS)
 
-        #c.solve_self_collision_constraints(self.DT)
-        for o in self.objects:
-            c.solve_collision_constraints(o)
+        
 
         
 
         
             
-        c.apply_correction(self.DT)
 
     """ 
     runs the simulation

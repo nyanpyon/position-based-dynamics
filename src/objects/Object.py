@@ -35,3 +35,7 @@ class Object(object, metaclass=ABCMeta):
     @abstractmethod
     def solve_collision_constraint(self, p, old_p, t):
         pass
+
+    @abstractmethod
+    def push_outside(self, p, old_p, t):
+        pass

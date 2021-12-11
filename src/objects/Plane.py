@@ -82,4 +82,10 @@ class Plane(Object):
     @ti.func
     def solve_collision_constraint(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
         d = p - old_p
+        cp = old_p + t * d
         return -(1.1-t) * d
+
+    @ti.func
+    def push_outside(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
+        d = p - old_p
+        return -t * d + self.drest * self.normal

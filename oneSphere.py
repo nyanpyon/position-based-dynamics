@@ -1,12 +1,11 @@
 import taichi as ti
 
 from src.Simulation import Simulation
-from src.objects.Box import Box
 from src.objects.Sphere import Sphere
 from src.objects.Plane import Plane
 from src.clothes.GridCloth import GridCloth
 
-sim = Simulation("test", res=(1600, 900), dt=0.01,MODE=ti.cpu)
+sim = Simulation("test", res=(1600, 900), dt=0.002, MODE=ti.cpu, iterations=1)
 sim.set_camera((-0.8, 1.6, 0.5), (0, 0, 0))
 sim.add_light((-0.1, -0.1, 1), (1, 1, 1))
 

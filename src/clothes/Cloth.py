@@ -138,9 +138,12 @@ class Cloth(object, metaclass=ABCMeta):
             old_point = self.x[i]
 
             t = obj.collides(point, old_point)
-            if t >= 0 and t <= 1:
+            if (t > 0 and t <= 1):
                 corr = obj.solve_collision_constraint(point, old_point, t)
                 ti.atomic_add(self.p[i], (self.KC) * corr)
+            if t < 0:
+                corr = obj.push_outside(point, old_point, t)
+                #ti.atomic_add(self.p[i], corr)
 
     @ti.func
     def triangle_collision(self, p, old_p, V1, V2, V3):

@@ -49,10 +49,10 @@ class Sphere(Object):
         b = 2 * oc.dot(d)
         c = oc.dot(oc) - (self.radius) * (self.radius) 
 
-        t = -1.
+        t = 0
         det = b * b - 4 * a * c 
 
-        if det > 0:
+        if det >= 0:
             t1 = (-b + ti.sqrt(det)) / (2 * a)
             t2 = (-b - ti.sqrt(det)) / (2 * a)
 
@@ -63,7 +63,10 @@ class Sphere(Object):
                     t = t2
                 else:
                     t = t1
-
+            elif t1 >= 0:
+                t = t2
+            elif t2 >= 0:
+                t = t1
 
         return t
 
@@ -84,3 +87,11 @@ class Sphere(Object):
         C = (p - collision_point).dot(n) - self.drest
         lagrange = C
         return - lagrange * n
+
+    @ti.func
+    def push_outside(self, p : ti.template(), old_p : ti.template(), t : ti.f32):
+        d =  p - old_p
+        collision_point = old_p + t * d
+        n = collision_point - self.center
+        n = n / n.norm()
+        return -t * d + self.drest * n
