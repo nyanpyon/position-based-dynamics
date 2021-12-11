@@ -39,7 +39,7 @@ class Sphere(Object):
         p : ti.Vector([x, y, z])
             the point which collides
     """
-    @ti.func
+    #@ti.func
     def collides(self, p : ti.template(), old_p : ti.template()):
         d = p - old_p
 
