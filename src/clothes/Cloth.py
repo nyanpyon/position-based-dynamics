@@ -49,7 +49,7 @@ class Cloth(object, metaclass=ABCMeta):
     @ti.kernel
     def external_forces(self, G : ti.f32, DT : ti.f32):
         for i in range(self.V):
-            self.v[i].z = DT * G
+            self.v[i].z += DT * G
             self.v[i] *= self.DAMPING 
 
     @ti.kernel
@@ -214,7 +214,7 @@ class Cloth(object, metaclass=ABCMeta):
 
                         
                         ti.atomic_add(self.p[i], C/S * self.WEIGHT[i] * cp)
-                        #ti.atomic_add(self.p[vi1], -C/S * self.WEIGHT[vi1] * c1)
+                        ti.atomic_add(self.p[vi1], -C/S * self.WEIGHT[vi1] * c1)
                         #ti.atomic_add(self.p[vi2], -C/S * self.WEIGHT[vi2] * c2)
                         #ti.atomic_add(self.p[vi3], -C/S * self.WEIGHT[vi3] * c3)
 
