@@ -1,8 +1,12 @@
+from typing import Mapping
 import taichi as ti
 import numpy as np
 import math
 from src.objects.Box import Object 
 from src.clothes.Cloth import Cloth 
+import os
+import imageio
+from tqdm import tqdm
 
 class Simulation():
     """
@@ -16,14 +20,20 @@ class Simulation():
         res: tuple(width, height)
             window size in pixels
     """
-    def __init__(self, name, gravity=-10, dt=0.005, res=(500, 500), iterations=4):
-        ti.init(arch=ti.cpu)
+    def __init__(self, name, gravity=-10, dt=0.005, res=(500, 500), iterations=4, MODE=ti.cpu, rotateCamera=False):
+        ti.init(arch=MODE)
 
         # simulation properties
         self.name = name
         self.GRAVITY = gravity
         self.DT = dt
         self.NUM_ITERATIONS = iterations
+        
+        # video manager
+        self.video = False
+        self.MAX_TIME = -1
+        self.frame_rate = 0
+        self.temp_path = 'temp/'
 
         # window properties
         self.RES=res
@@ -33,6 +43,7 @@ class Simulation():
         self.camera_position = ti.Vector([0, -1, 0])
         self.camera_lookat = ti.Vector([0, 0, 0])
         self.camera_up = ti.Vector([0, 0, 1])
+        self.rotateCamera = rotateCamera
 
         # objects of the scene
         self.lights = []
@@ -58,8 +69,12 @@ class Simulation():
         self.camera_lookat = camera_lookat
         self.camera_up = camera_up
 
-    def draw_camera(self):
-        #self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
+    def draw_camera(self, TIME):
+        if self.rotateCamera:
+             p = self.camera_position * ti.Vector([2 * math.cos(TIME), 2 * math.sin(TIME), 1])
+             self.camera.position(p[0], p[1], p[2])
+        else:
+            self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
         self.camera.lookat(self.camera_lookat[0], self.camera_lookat[1], self.camera_lookat[2])
         self.camera.up(self.camera_up[0], self.camera_up[1], self.camera_up[2])   
         self.scene.set_camera(self.camera)
@@ -83,6 +98,13 @@ class Simulation():
     def add_object(self, obj):
         self.objects.append(obj)
 
+    def make_video(self, name, framerate=30, MAX_TIME=-1):
+        self.MAX_TIME = MAX_TIME
+        self.video = True
+        self.frame_rate = framerate
+        self.video_path = f"videos/{name}"
+
+
     """
     adds object to the scene
         cloth: CLoth
@@ -99,28 +121,43 @@ class Simulation():
 
         c.make_predictions(self.DT)
 
+        
+        #c.solve_self_collision_constraints(self.DT)
+        for o in self.objects:
+            c.generate_collision_constraints(o)
+
         #call solver
         for i in range(self.NUM_ITERATIONS):
             c.solve_stretching_constraint(self.NUM_ITERATIONS)
             c.solve_bending_constraints(self.NUM_ITERATIONS)
+            c.solve_collision_constraints(self.NUM_ITERATIONS)
+        
+        c.clear_collision_constraints()
+        c.apply_correction()
 
-            for o in self.objects:
-                c.solve_collision_constraints(self.NUM_ITERATIONS, o)
 
-            c.update_predictions()
-        c.apply_correction(self.DT)
+        
+
+        
+
+        
+            
 
     """ 
     runs the simulation
     """
     
+    
     def run(self):
-        z = 0
-        while self.window.running:
-            z += 0.003
+        TIME = 0
+        img_num = 0
+        next_frame = 0
+        while (self.MAX_TIME == -1 and self.window.running) or TIME < self.MAX_TIME:
+            TIME += self.DT
+            next_frame += self.DT
 
-            self.camera.position(2 * math.cos(z), 2 * math.sin(z), 1)
-            self.draw_camera()
+           
+            self.draw_camera(TIME)
             
 
             # add lights
@@ -136,6 +173,26 @@ class Simulation():
                 c.draw(self.scene)
 
             self.canvas.scene(self.scene)
+            
+            if self.video:
+                if next_frame >= 10.0/self.frame_rate:
+                    self.window.write_image(f"{self.temp_path}image_{img_num:07d}.png")
+                    img_num += 1
+                    next_frame = 0
+            
             self.window.show()
+        if self.video:
+            images = []
+            for f in os.listdir(self.temp_path):
+                filename = os.path.join(self.temp_path, f)
+                images.append(filename)
+                
+            with imageio.get_writer(f"{self.video_path}.gif", mode='I', fps=self.frame_rate) as writer:
+                for filename in tqdm(images):
+                    image = imageio.imread(filename)
+                    writer.append_data(image)
+                    os.remove(filename)
+
+
 
 

@@ -1,2 +1,7 @@
 .vscode
 imgui.ini
+src/__pycache__/*
+src/objects/__pycache__/*
+src/clothes/__pycache__/*
+temp/*
+videos/*
