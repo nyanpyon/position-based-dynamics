@@ -14,6 +14,16 @@ CUBE_FACES = [
     [0, 3, 7, 4]
 ]
 
+def make_rotation_matrix(rotation):
+    a = rotation[0]
+    b = rotation[1]
+    c = rotation[2]
+    R = ti.Matrix([
+            [ti.cos(a) * ti.cos(b), ti.cos(a) * ti.sin(b) * ti.sin(c) - ti.sin(a) * ti.cos(c), ti.cos(a) * ti.sin(b) * ti.cos(c) + ti.sin(a) * ti.sin(c)],
+            [ti.sin(a) * ti.cos(b), ti.sin(a) * ti.sin(b) * ti.sin(c) + ti.cos(a) * ti.cos(c), ti.sin(a) * ti.sin(b) * ti.cos(c) - ti.cos(a) * ti.sin(c)],
+            [- ti.sin(b), ti.cos(b) * ti.sin(c), ti.cos(b) * ti.cos(c)]
+        ])
+    return R
 """
 divides a face into 2 triangles
 """
@@ -39,15 +49,20 @@ class Box(Object):
         color : tuple(r, g, b) , optional
             rgb color of the cube
     """
-    def __init__(self, center, size, color=(1, 1, 1), drest=0.01):
+    def __init__(self, center, size, color=(1, 1, 1), drest=0.01, rotation=[0, 0, 0]):
         self.center = center
         self.size = size
         self.color = color
         self.drest = drest
-
-        self.vertices, self.indices = self.make_box()
-
         
+        
+        
+        self.vertices, self.indices = self.make_box()
+        self.rotation = rotation
+        
+        self.R = make_rotation_matrix(self.rotation)
+        print(self.R)
+        self.rotate_box()
 
     """
     returns the vertices list and the indeces of the box
@@ -74,6 +89,10 @@ class Box(Object):
             indices[i] = e
         return vertices, indices
 
+    @ti.kernel
+    def rotate_box(self):
+        for i in range(self.vertices.shape[0]):
+            self.vertices[i] = (self.R @ (self.vertices[i] - self.center)) + self.center
     """
     @OVERRIDE
     draws the object
@@ -86,24 +105,6 @@ class Box(Object):
                color=self.color,
                two_sided=True)
 
-    """
-    @OVERRIDE
-    check if p collides with the object
-        p : ti.Vector([x, y, z])
-            the point which collides
-    """
-    @ti.func
-    def collides(self, p : ti.template(), old_p : ti.template()):
-        corner = self.center - (self.size/2)
-        left = corner.x - self.drest
-        right = corner.x + self.size.x + self.drest
-        down = corner.z - self.drest
-        up = corner.z + self.size.z + self.drest
-        front = corner.y - self.drest
-        back = corner.y + self.size.y + self.drest
-        return (p.x > left and p.x < right and 
-            p.z > down and p.z < up and 
-            p.y > front and p.y < back)
 
     """
     @OVERRIDE
@@ -111,5 +112,46 @@ class Box(Object):
         p : ti.Vector([x, y, z])
             the point which collides
     """
-    def solve_collision_constraint(self, p, old_p):
-        pass
+    @ti.func
+    def solve_collision_constraint(self, p : ti.template(), x : ti.template()):
+        cp = p - self.center
+        w = self.R @ ti.Vector([self.size.x/2, 0, 0]) 
+        d = self.R @ ti.Vector([0, self.size.y/2, 0])
+        h = self.R @ ti.Vector([0, 0, self.size.z/2])
+        what = w/w.norm() 
+        dhat = d/d.norm()
+        hhat = h/h.norm()
+
+        dw = cp.dot(what)
+        dd = cp.dot(dhat)
+        dh = cp.dot(hhat)
+
+        absdw = w.norm() + self.drest - abs(dw)
+        absdd = d.norm() + self.drest - abs(dd)
+        absdh = h.norm() + self.drest - abs(dh)
+
+        res = x - x
+        if absdw > 0 and absdd > 0 and absdh > 0:
+            argmin = 1
+            vmin = absdw
+            if vmin > absdd:
+                argmin = 2
+                vmin = absdd
+            if vmin > absdh:
+                argmin = 3
+                vmin = absdh
+            
+            if argmin == 1:
+                res = what * (absdw)
+                if dw < 0:
+                    res = - res
+            elif argmin == 2:
+                res = dhat * (absdd)
+                if dd < 0:
+                    res = - res
+            elif argmin == 3:
+                res = hhat * (absdh)
+                if dh < 0:
+                    res = - res
+        return res
+        
