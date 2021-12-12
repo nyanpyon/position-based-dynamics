@@ -20,7 +20,7 @@ class Simulation():
         res: tuple(width, height)
             window size in pixels
     """
-    def __init__(self, name, gravity=-10, dt=0.005, res=(500, 500), iterations=4, MODE=ti.cpu, rotateCamera=False):
+    def __init__(self, name, gravity=-10, dt=0.005, res=(500, 500), iterations=4, MODE=ti.cpu, rotateCamera=0.0, selfCollision=False):
         ti.init(arch=MODE)
 
         # simulation properties
@@ -28,7 +28,8 @@ class Simulation():
         self.GRAVITY = gravity
         self.DT = dt
         self.NUM_ITERATIONS = iterations
-        self.EXTERNAL_FORCE = ti.Vector([0, 0, 0])
+        self.WIND = ti.Vector([0, 0, 0])
+        self.selfCollision = selfCollision
         
         # video manager
         self.video = False
@@ -71,8 +72,8 @@ class Simulation():
         self.camera_up = camera_up
 
     def draw_camera(self, TIME):
-        if self.rotateCamera:
-             p = self.camera_position * ti.Vector([2 * math.cos(TIME), 2 * math.sin(TIME), 1])
+        if self.rotateCamera > 0:
+             p = self.camera_position * ti.Vector([math.cos(TIME * 1/self.rotateCamera), math.sin(TIME * 1/self.rotateCamera), 1])
              self.camera.position(p[0], p[1], p[2])
         else:
             self.camera.position(self.camera_position[0], self.camera_position[1], self.camera_position[2])
@@ -104,9 +105,14 @@ class Simulation():
         self.video = True
         self.frame_rate = framerate
         self.video_path = f"videos/{name}"
+        
+        if not os.path.isdir("videos/"):
+            os.mkdir("videos/")
+        if not os.path.isdir(self.temp_path):
+            os.mkdir(self.temp_path)
 
-    def set_external_force(self, force):
-        self.EXTERNAL_FORCE = force
+    def set_wind(self, force):
+        self.WIND = force
 
 
     """
@@ -121,7 +127,7 @@ class Simulation():
     CORE PBD algorithm
     """
     def update_cloth(self, c):
-        c.external_forces(self.GRAVITY, self.EXTERNAL_FORCE, self.DT)
+        c.external_forces(self.GRAVITY, self.WIND, self.DT)
 
         c.make_predictions(self.DT)
 
@@ -130,11 +136,13 @@ class Simulation():
         #c.solve_self_collision_constraints(self.DT)
         #call solver
         for i in range(self.NUM_ITERATIONS):
-            c.solve_self_collision_constraints(self.DT)
             for o in self.objects:
                 c.solve_collision_constraints(o, self.NUM_ITERATIONS)
+            
             c.solve_stretching_constraint(self.NUM_ITERATIONS)
             c.solve_bending_constraints(self.NUM_ITERATIONS)
+            if self.selfCollision:
+                c.solve_self_collision_constraints(self.DT)
             
             
         

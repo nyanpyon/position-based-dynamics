@@ -4,7 +4,7 @@ from src.objects.Object import Object
 
 @ti.data_oriented
 class Cloth(object, metaclass=ABCMeta):
-    def __init__(self, V, POSITIONS, VELOCITIES, WEIGHT, indices, edges, tripairs, color, KS, KC, KB, DAMPING):
+    def __init__(self, V, POSITIONS, VELOCITIES, WEIGHT, indices, edges, tripairs, color, KS, KC, KB, KD, KL, DAMPING):
         self.V = V
         self.POSITIONS = POSITIONS
         self.VELOCITIES = VELOCITIES
@@ -15,13 +15,27 @@ class Cloth(object, metaclass=ABCMeta):
         self.KS = KS
         self.KC = KC
         self.KB = KB
+        self.KL = KL
+        self.KD = KD
         self.DAMPING = DAMPING
         self.objs = None
 
         self.vertices = ti.Vector.field(3, float, self.V)
         self.x = ti.Vector.field(3, float, self.V)
         self.fixed = ti.field(int, self.V)
+        self.nt = ti.field(int, self.V)
+
+        for j in range(self.indices.shape[0]//3):
+            vi1 = self.indices[j * 3 + 0]
+            vi2 = self.indices[j * 3 + 1]
+            vi3 = self.indices[j * 3 + 2]
+
+            self.nt[vi1] += 1
+            self.nt[vi2] += 1
+            self.nt[vi3] += 1
+
         self.v = ti.Vector.field(3, float, self.V)
+        self.dv = ti.Vector.field(3, float, self.V)
         self.p = ti.Vector.field(3, float, self.V)
         self.WEIGHT = WEIGHT
 
@@ -48,11 +62,47 @@ class Cloth(object, metaclass=ABCMeta):
                two_sided=True)
 
     @ti.kernel
-    def external_forces(self, G : ti.f32, force: ti.template(), DT : ti.f32):
+    def external_forces(self, G : ti.f32, wind: ti.template(), DT : ti.f32):
         for i in range(self.V):
-            self.v[i].z += DT * G
-            self.v[i] += DT * force
-            self.v[i] *= self.DAMPING 
+            self.dv[i] = ti.Vector([0, 0, 0])
+
+        for j in range(self.indices.shape[0]/3):
+            vi1 = self.indices[j * 3 + 0]
+            vi2 = self.indices[j * 3 + 1]
+            vi3 = self.indices[j * 3 + 2]
+            
+            V1 = self.x[vi1]
+            V2 = self.x[vi2]
+            V3 = self.x[vi3]
+
+            Vv1 = self.v[vi1]
+            Vv2 = self.v[vi2]
+            Vv3 = self.v[vi3]
+
+            n = (V2 - V1).cross(V3 - V1)
+
+            A =  n.norm() / 2
+            FL = self.KL * A * ti.Vector([0, 0, 1]) 
+
+            n = n / n.norm()
+            v = (Vv1 + Vv2 + Vv3)/3 + wind * DT
+            if n.dot(v) < 0:
+                n = -n
+
+            #FD = self.KD * A * v.dot(n) * (-v)
+            FD = 0.5 * self.KD * v.norm()**2 * A * v.dot(n) * (-v)
+
+            if self.WEIGHT[vi1] > 0:
+                self.dv[vi1] += DT *(FL + FD) / self.WEIGHT[vi1]
+            if self.WEIGHT[vi2] > 0:
+                self.dv[vi2] += DT *(FL + FD) / self.WEIGHT[vi2]
+            if self.WEIGHT[vi3] > 0:
+                self.dv[vi3] += DT * (FL + FD) / self.WEIGHT[vi3]
+
+        for i in range(self.V):
+            self.dv[i] /= self.nt[i]
+            self.dv[i].z += DT * G
+            self.v[i] += self.DAMPING * self.dv[i]
 
     @ti.kernel
     def make_predictions(self, DT : ti.f32):
@@ -176,7 +226,6 @@ class Cloth(object, metaclass=ABCMeta):
         for i in range(self.V):
             p = self.p[i]
             x = self.x[i]
-            v = self.v[i]
 
             for j in range(self.indices.shape[0]/3):
                 vi1 = self.indices[j * 3 + 0]
@@ -187,27 +236,33 @@ class Cloth(object, metaclass=ABCMeta):
                 V2 = self.p[vi2]
                 V3 = self.p[vi3]
 
+                V1o = self.x[vi1]
+                V2o = self.x[vi2]
+                V3o = self.x[vi3]
+
                 
                 if not(i == vi1 or i == vi2 or i == vi3):
                     tc = (V1 + V2 + V3) / 3
                     D = (V2 - V1).norm() + (V3 - V1).norm()
                     if (p - tc).norm() < D/2:
-                        thickness = 0.02
-                        t = self.triangle_collision(p, x, V1, V2, V3)
+                        thickness = 0.002
 
+                        t = self.triangle_collision(p, x, V1, V2, V3)
+                        t2 = self.triangle_collision(p, x, V1o, V2o, V3o)
                         
-                        if t >= 0 and t <= 1:
+                        if t >= 0 and t <= 1 and t2 >= 0:
                             n = (V2 - V1).cross(V3 - V1)
                             n = n / n.norm()
                             
+                            v = p - x
                             if n.dot(v) > 0:
                                 n = -n
 
                             C = n.dot(p - V1) - 2 * thickness
                             M = -1. * n.outer_product(n)
-                            M[0, 0] = 1 + M[0, 0]
-                            M[1, 1] = 1 + M[1, 1]
-                            M[2, 2] = 1 + M[2, 2]
+                            M[0, 0] += 1
+                            M[1, 1] += 1 
+                            M[2, 2] += 1 
 
                             M = M / n.norm()
 
@@ -216,7 +271,7 @@ class Cloth(object, metaclass=ABCMeta):
                             c2 = (V3 - V1).cross(M @ n)
                             c3 = (V2 - V1).cross(M @ n)
 
-                            S = self.WEIGHT[i] * cp.norm() + self.WEIGHT[vi1] * c1.norm() + self.WEIGHT[vi2] * c2.norm() + self.WEIGHT[vi3] * c3.norm()
+                            S = self.WEIGHT[i] * cp.norm()**2 + self.WEIGHT[vi1] * c1.norm()**2 + self.WEIGHT[vi2] * c2.norm()**2 + self.WEIGHT[vi3] * c3.norm()**2
 
                             
                             ti.atomic_add(self.p[i], -C/S * self.WEIGHT[i] * cp)
