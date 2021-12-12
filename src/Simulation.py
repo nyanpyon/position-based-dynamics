@@ -28,6 +28,7 @@ class Simulation():
         self.GRAVITY = gravity
         self.DT = dt
         self.NUM_ITERATIONS = iterations
+        self.EXTERNAL_FORCE = ti.Vector([0, 0, 0])
         
         # video manager
         self.video = False
@@ -104,6 +105,9 @@ class Simulation():
         self.frame_rate = framerate
         self.video_path = f"videos/{name}"
 
+    def set_external_force(self, force):
+        self.EXTERNAL_FORCE = force
+
 
     """
     adds object to the scene
@@ -117,7 +121,7 @@ class Simulation():
     CORE PBD algorithm
     """
     def update_cloth(self, c):
-        c.external_forces(self.GRAVITY, self.DT)
+        c.external_forces(self.GRAVITY, self.EXTERNAL_FORCE, self.DT)
 
         c.make_predictions(self.DT)
 
@@ -126,7 +130,7 @@ class Simulation():
         #c.solve_self_collision_constraints(self.DT)
         #call solver
         for i in range(self.NUM_ITERATIONS):
-            
+            c.solve_self_collision_constraints(self.DT)
             for o in self.objects:
                 c.solve_collision_constraints(o, self.NUM_ITERATIONS)
             c.solve_stretching_constraint(self.NUM_ITERATIONS)

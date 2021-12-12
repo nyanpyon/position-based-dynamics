@@ -20,6 +20,7 @@ class Cloth(object, metaclass=ABCMeta):
 
         self.vertices = ti.Vector.field(3, float, self.V)
         self.x = ti.Vector.field(3, float, self.V)
+        self.fixed = ti.field(int, self.V)
         self.v = ti.Vector.field(3, float, self.V)
         self.p = ti.Vector.field(3, float, self.V)
         self.WEIGHT = WEIGHT
@@ -47,9 +48,10 @@ class Cloth(object, metaclass=ABCMeta):
                two_sided=True)
 
     @ti.kernel
-    def external_forces(self, G : ti.f32, DT : ti.f32):
+    def external_forces(self, G : ti.f32, force: ti.template(), DT : ti.f32):
         for i in range(self.V):
             self.v[i].z += DT * G
+            self.v[i] += DT * force
             self.v[i] *= self.DAMPING 
 
     @ti.kernel
@@ -63,7 +65,12 @@ class Cloth(object, metaclass=ABCMeta):
         for i in range(self.V):
             self.v[i] = (self.x[i] - self.p[i]) / DT
             self.x[i] = self.p[i]
+            if self.fixed[i] == 1:
+                self.x[i] = self.POSITIONS[i]
 
+    def fix_point(self, v):
+        self.fixed[v] = 1
+        self.WEIGHT[v] = 0
 
 
     @ti.kernel
@@ -142,35 +149,34 @@ class Cloth(object, metaclass=ABCMeta):
             ti.atomic_add(self.p[i], KC * corr)
 
     @ti.func
-    def triangle_collision(self, p, old_p, V1, V2, V3):
+    def triangle_collision(self, p, x, V1, V2, V3):
         E1 = V2 - V1
         E2 = V3 - V1
-        D = p - old_p
-        T = old_p - V1
+        D = p - x
+        T = x - V1
 
         P = D.cross(E2)
         Q = T.cross(E1)
 
         S = 1 / (P.dot(E1))
 
-        t = S * Q.dot(E1)
+        t = S * Q.dot(E2)
 
         u = S * P.dot(T)
         v = S * Q.dot(D)
 
         if not (u >= 0 and v >= 0 and v + u <= 1):
             t = -1 
-        
+            
         return t
 
 
     @ti.kernel
     def solve_self_collision_constraints(self, dt : ti.f32):
         for i in range(self.V):
-            point = self.p[i]
-            old_point = self.x[i]
+            p = self.p[i]
+            x = self.x[i]
             v = self.v[i]
-            new_point = point + dt * v
 
             for j in range(self.indices.shape[0]/3):
                 vi1 = self.indices[j * 3 + 0]
@@ -183,63 +189,63 @@ class Cloth(object, metaclass=ABCMeta):
 
                 
                 if not(i == vi1 or i == vi2 or i == vi3):
-                    
-                    thickness = 0.001
-                    t = self.triangle_collision(new_point, point, V1, V2, V3)
-
-                    
-                    if t >= 0 and t <= 1:
-                        
-                       
-                        n = (V2 - V1).cross(V3 - V1)
-                        n = n / n.norm()
-                        
-                        if n.dot(v) > 0:
-                            n = -n
-
-                        C = n.dot(new_point - V1) - 2 * thickness
-                        M = n.outer_product(n)
-                        M[0, 0] = 1 - M[0, 0]
-                        M[1, 1] = 1 - M[1, 1]
-                        M[2, 2] = 1 - M[2, 2]
-
-                        M = M / n.norm()
-
-                        cp = -n
-                        c1 = (V2 - V3).cross(M @ n - n)
-                        c2 = (V3 - V1).cross(M @ n)
-                        c3 = (V2 - V1).cross(M @ n)
-
-                        S = self.WEIGHT[i] * cp.norm() + self.WEIGHT[vi1] * c1.norm() + self.WEIGHT[vi2] * c2.norm() + self.WEIGHT[vi3] * c3.norm()
+                    tc = (V1 + V2 + V3) / 3
+                    D = (V2 - V1).norm() + (V3 - V1).norm()
+                    if (p - tc).norm() < D/2:
+                        thickness = 0.02
+                        t = self.triangle_collision(p, x, V1, V2, V3)
 
                         
-                        ti.atomic_add(self.p[i], C/S * self.WEIGHT[i] * cp)
-                        ti.atomic_add(self.p[vi1], -C/S * self.WEIGHT[vi1] * c1)
-                        #ti.atomic_add(self.p[vi2], -C/S * self.WEIGHT[vi2] * c2)
-                        #ti.atomic_add(self.p[vi3], -C/S * self.WEIGHT[vi3] * c3)
+                        if t >= 0 and t <= 1:
+                            n = (V2 - V1).cross(V3 - V1)
+                            n = n / n.norm()
+                            
+                            if n.dot(v) > 0:
+                                n = -n
+
+                            C = n.dot(p - V1) - 2 * thickness
+                            M = -1. * n.outer_product(n)
+                            M[0, 0] = 1 + M[0, 0]
+                            M[1, 1] = 1 + M[1, 1]
+                            M[2, 2] = 1 + M[2, 2]
+
+                            M = M / n.norm()
+
+                            cp = n
+                            c1 = (V2 - V3).cross(M @ n) - n
+                            c2 = (V3 - V1).cross(M @ n)
+                            c3 = (V2 - V1).cross(M @ n)
+
+                            S = self.WEIGHT[i] * cp.norm() + self.WEIGHT[vi1] * c1.norm() + self.WEIGHT[vi2] * c2.norm() + self.WEIGHT[vi3] * c3.norm()
+
+                            
+                            ti.atomic_add(self.p[i], -C/S * self.WEIGHT[i] * cp)
+                            ti.atomic_add(self.p[vi1], -C/S * self.WEIGHT[vi1] * c1)
+                            ti.atomic_add(self.p[vi2], -C/S * self.WEIGHT[vi2] * c2)
+                            ti.atomic_add(self.p[vi3], -C/S * self.WEIGHT[vi3] * c3)
 
 
-                    """
-                    thickness = 0.001
-                    t = self.triangle_collision(point, old_point, V1, V2, V3)
-                    d = point - old_point
+                        """
+                        thickness = 0.001
+                        t = self.triangle_collision(point, old_point, V1, V2, V3)
+                        d = point - old_point
 
-                    triangle_normal = (V2 - V1).cross(V3 -V1)
-                    triangle_normal = triangle_normal/triangle_normal.norm()
+                        triangle_normal = (V2 - V1).cross(V3 -V1)
+                        triangle_normal = triangle_normal/triangle_normal.norm()
 
-                    if d.dot(triangle_normal) < 0:
-                        triangle_normal = -triangle_normal
-                        
-                    collision_point = old_point + t * d
+                        if d.dot(triangle_normal) < 0:
+                            triangle_normal = -triangle_normal
+                            
+                        collision_point = old_point + t * d
 
-                    #lagrange = (point - collision_point).dot(triangle_normal) + thickness
-                    #lagrange = (point - collision_point).norm() + thickness
+                        #lagrange = (point - collision_point).dot(triangle_normal) + thickness
+                        #lagrange = (point - collision_point).norm() + thickness
 
-                    #corr = (collision_point - p) + thickness * 
+                        #corr = (collision_point - p) + thickness * 
 
-                    if t >= 0 and t <= 1:
-                        #ti.atomic_add(self.p[i],  - lagrange * triangle_normal)
-                        ti.atomic_add(self.p[i], (collision_point - point) - thickness * triangle_normal)
-                    """ 
+                        if t >= 0 and t <= 1:
+                            #ti.atomic_add(self.p[i],  - lagrange * triangle_normal)
+                            ti.atomic_add(self.p[i], (collision_point - point) - thickness * triangle_normal)
+                        """ 
 
                 
